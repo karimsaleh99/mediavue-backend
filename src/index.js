@@ -26,12 +26,7 @@ let cacheUpdatedAt = null;
 // ── Middleware ──────────────────────────────────────────────────────────────
 
 app.use(cors({
-  origin: [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://mediavue.vercel.app",
-    /\.mediavue\.fr$/,
-  ],
+ origin: "*",
 }));
 app.use(express.json());
 
