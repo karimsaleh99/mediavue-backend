@@ -7,7 +7,7 @@
 //   GET /api/status           — pipeline health check
 //   POST /api/pipeline/run    — manually trigger a pipeline run
 
-require("dotenv").config();
+require("dotenv").config();const stripeRouter = require('./stripe');
 
 const express = require("express");
 const cors = require("cors");
@@ -155,7 +155,7 @@ async function start() {
       cacheUpdatedAt = new Date().toISOString();
     }
   });
-
+app.use('/api/stripe', stripeRouter);
   app.listen(PORT, () => {
     console.log(`[server] Listening on http://localhost:${PORT}`);
     console.log(`[server] API ready at http://localhost:${PORT}/api/stories`);
