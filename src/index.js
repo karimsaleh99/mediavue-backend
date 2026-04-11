@@ -28,7 +28,13 @@ let cacheUpdatedAt = null;
 app.use(cors({
  origin: "*",
 }));
-app.use(express.json());
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/stripe/webhook') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 
 // Request logger
 app.use((req, _res, next) => {
