@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const Stripe = require('stripe');
 
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+let stripe;
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
@@ -20,7 +20,7 @@ const PRICES = {
 };
 
 // Create checkout session
-router.post('/create-checkout', async (req, res) => {
+router.post('/create-checkout', async (req, res) => {if (!stripe) stripe = Stripe(process.env.STRIPE_SECRET_KEY);
   try {
     const { plan, userId, userEmail } = req.body;
 
@@ -47,7 +47,7 @@ router.post('/create-checkout', async (req, res) => {
 });
 
 // Stripe webhook — marks user as premium after payment
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {if (!stripe) stripe = Stripe(process.env.STRIPE_SECRET_KEY);
   const sig = req.headers['stripe-signature'];
   let event;
 
