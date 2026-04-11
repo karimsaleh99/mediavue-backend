@@ -7,6 +7,7 @@ import {
   GenericTable,
   GenericView,
 } from './types/common/common'
+import { RejectExcessProperties } from './types/types'
 
 export default class PostgrestQueryBuilder<
   ClientOptions extends ClientServerOptions,
@@ -23,9 +24,25 @@ export default class PostgrestQueryBuilder<
   urlLengthLimit: number
 
   /**
+   * Enable or disable automatic retries for transient errors.
+   * When enabled, idempotent requests (GET/HEAD/OPTIONS) that fail with network
+   * errors or HTTP 503/520 responses are automatically retried with exponential
+   * backoff (1s, 2s, 4s, up to 3 attempts). Defaults to `true` when not specified.
+   */
+  retry?: boolean
+
+  /**
    * Creates a query builder scoped to a Postgres table or view.
    *
    * @category Database
+   *
+   * @param url - The URL for the query
+   * @param options - Named parameters
+   * @param options.headers - Custom headers
+   * @param options.schema - Postgres schema to use
+   * @param options.fetch - Custom fetch implementation
+   * @param options.urlLengthLimit - Maximum URL length before warning
+   * @param options.retry - Enable automatic retries for transient errors (default: true)
    *
    * @example Creating a Postgrest query builder
    * ```ts
@@ -33,7 +50,7 @@ export default class PostgrestQueryBuilder<
    *
    * const query = new PostgrestQueryBuilder(
    *   new URL('https://xyzcompany.supabase.co/rest/v1/users'),
-   *   { headers: { apikey: 'public-anon-key' } }
+   *   { headers: { apikey: 'public-anon-key' }, retry: true }
    * )
    * ```
    */
@@ -44,11 +61,13 @@ export default class PostgrestQueryBuilder<
       schema,
       fetch,
       urlLengthLimit = 8000,
+      retry,
     }: {
       headers?: HeadersInit
       schema?: string
       fetch?: Fetch
       urlLengthLimit?: number
+      retry?: boolean
     }
   ) {
     this.url = url
@@ -56,6 +75,7 @@ export default class PostgrestQueryBuilder<
     this.schema = schema
     this.fetch = fetch
     this.urlLengthLimit = urlLengthLimit
+    this.retry = retry
   }
 
   /**
@@ -904,12 +924,16 @@ export default class PostgrestQueryBuilder<
       schema: this.schema,
       fetch: this.fetch,
       urlLengthLimit: this.urlLengthLimit,
+      retry: this.retry,
     })
   }
 
   // TODO(v3): Make `defaultToNull` consistent for both single & bulk inserts.
   insert<Row extends Relation extends { Insert: unknown } ? Relation['Insert'] : never>(
-    values: Row,
+    values: RejectExcessProperties<
+      Relation extends { Insert: unknown } ? Relation['Insert'] : never,
+      Row
+    >,
     options?: {
       count?: 'exact' | 'planned' | 'estimated'
     }
@@ -923,7 +947,10 @@ export default class PostgrestQueryBuilder<
     'POST'
   >
   insert<Row extends Relation extends { Insert: unknown } ? Relation['Insert'] : never>(
-    values: Row[],
+    values: RejectExcessProperties<
+      Relation extends { Insert: unknown } ? Relation['Insert'] : never,
+      Row
+    >[],
     options?: {
       count?: 'exact' | 'planned' | 'estimated'
       defaultToNull?: boolean
@@ -1049,7 +1076,15 @@ export default class PostgrestQueryBuilder<
    * ```
    */
   insert<Row extends Relation extends { Insert: unknown } ? Relation['Insert'] : never>(
-    values: Row | Row[],
+    values:
+      | RejectExcessProperties<
+          Relation extends { Insert: unknown } ? Relation['Insert'] : never,
+          Row
+        >
+      | RejectExcessProperties<
+          Relation extends { Insert: unknown } ? Relation['Insert'] : never,
+          Row
+        >[],
     {
       count,
       defaultToNull = true,
@@ -1092,12 +1127,16 @@ export default class PostgrestQueryBuilder<
       body: values,
       fetch: this.fetch ?? fetch,
       urlLengthLimit: this.urlLengthLimit,
+      retry: this.retry,
     })
   }
 
   // TODO(v3): Make `defaultToNull` consistent for both single & bulk upserts.
   upsert<Row extends Relation extends { Insert: unknown } ? Relation['Insert'] : never>(
-    values: Row,
+    values: RejectExcessProperties<
+      Relation extends { Insert: unknown } ? Relation['Insert'] : never,
+      Row
+    >,
     options?: {
       onConflict?: string
       ignoreDuplicates?: boolean
@@ -1113,7 +1152,10 @@ export default class PostgrestQueryBuilder<
     'POST'
   >
   upsert<Row extends Relation extends { Insert: unknown } ? Relation['Insert'] : never>(
-    values: Row[],
+    values: RejectExcessProperties<
+      Relation extends { Insert: unknown } ? Relation['Insert'] : never,
+      Row
+    >[],
     options?: {
       onConflict?: string
       ignoreDuplicates?: boolean
@@ -1339,7 +1381,15 @@ export default class PostgrestQueryBuilder<
    */
 
   upsert<Row extends Relation extends { Insert: unknown } ? Relation['Insert'] : never>(
-    values: Row | Row[],
+    values:
+      | RejectExcessProperties<
+          Relation extends { Insert: unknown } ? Relation['Insert'] : never,
+          Row
+        >
+      | RejectExcessProperties<
+          Relation extends { Insert: unknown } ? Relation['Insert'] : never,
+          Row
+        >[],
     {
       onConflict,
       ignoreDuplicates = false,
@@ -1389,6 +1439,7 @@ export default class PostgrestQueryBuilder<
       body: values,
       fetch: this.fetch ?? fetch,
       urlLengthLimit: this.urlLengthLimit,
+      retry: this.retry,
     })
   }
 
@@ -1532,7 +1583,10 @@ export default class PostgrestQueryBuilder<
    * ```
    */
   update<Row extends Relation extends { Update: unknown } ? Relation['Update'] : never>(
-    values: Row,
+    values: RejectExcessProperties<
+      Relation extends { Update: unknown } ? Relation['Update'] : never,
+      Row
+    >,
     {
       count,
     }: {
@@ -1562,6 +1616,7 @@ export default class PostgrestQueryBuilder<
       body: values,
       fetch: this.fetch ?? fetch,
       urlLengthLimit: this.urlLengthLimit,
+      retry: this.retry,
     })
   }
 
@@ -1710,6 +1765,7 @@ export default class PostgrestQueryBuilder<
       schema: this.schema,
       fetch: this.fetch ?? fetch,
       urlLengthLimit: this.urlLengthLimit,
+      retry: this.retry,
     })
   }
 }
