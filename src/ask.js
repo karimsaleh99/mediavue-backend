@@ -77,7 +77,7 @@ async function requirePremium(req, res, next) {
 // ── Rate limit (crude in-memory; swap for Redis later) ──────────────────────
 
 const usage = new Map(); // userId -> { count, resetAt }
-const DAILY_LIMITS = { monthly: 100, annual: 200, student: 50 };
+const DAILY_LIMITS = { monthly: 20, annual: 40, student: 10 };
 
 function checkLimit(userId, plan) {
   const limit = DAILY_LIMITS[plan] || 50;
