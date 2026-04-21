@@ -7,11 +7,13 @@
 //   GET /api/status           — pipeline health check
 //   POST /api/pipeline/run    — manually trigger a pipeline run
 
-require("dotenv").config();const stripeRouter = require('./stripe');
+require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
 const cron = require("node-cron");
+const stripeRouter = require("./stripe");
+const askRouter = require("./ask");
 const { runPipeline, getStatus } = require("./pipeline");
 const { getStories, getStoryById } = require("./db");
 const { SOURCES } = require("./sources");
@@ -128,6 +130,10 @@ app.get("/api/sources", (_req, res) => {
   });
 });
 
+// Mount sub-routers
+app.use("/api/stripe", stripeRouter);
+app.use("/api/ask", askRouter);
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function applyMemoryFilters(stories, { limit, offset, category }) {
@@ -161,7 +167,7 @@ async function start() {
       cacheUpdatedAt = new Date().toISOString();
     }
   });
-app.use('/api/stripe', stripeRouter);
+
   app.listen(PORT, () => {
     console.log(`[server] Listening on http://localhost:${PORT}`);
     console.log(`[server] API ready at http://localhost:${PORT}/api/stories`);
