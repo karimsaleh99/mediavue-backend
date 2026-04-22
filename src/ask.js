@@ -352,4 +352,25 @@ router.post("/suggest", requirePremium, async (req, res) => {
   }
 });
 
+// Public waitlist endpoint (no auth — collects pre-launch signups)
+router.post("/waitlist", express.json(), async (req, res) => {
+  const { email, feature } = req.body || {};
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "Invalid email" });
+  }
+  try {
+    const { error } = await getDb()
+      .from("ask_waitlist")
+      .insert({ email, feature: feature || "ask_mv" });
+    if (error) {
+      if (error.code === "23505") return res.status(409).json({ ok: true, duplicate: true });
+      throw error;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[ask/waitlist] error:", err.message);
+    res.status(500).json({ error: "Failed to register" });
+  }
+});
+
 module.exports = router;
