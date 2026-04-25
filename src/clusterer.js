@@ -156,9 +156,12 @@ function countCoverage(articles) {
     if (seen.has(article.sourceId)) return;
     seen.add(article.sourceId);
 
+    // 0-6 scale: 0=ext-gauche, 1=gauche, 2=centre-gauche, 3=centre,
+    // 4=centre-droite, 5=droite, 6=ext-droite. Bucket center-left/right
+    // alongside their respective sides for blindspot detection.
     const score = article.orientationScore;
-    if (score <= 1) counts.gauche++;
-    else if (score <= 3) counts.centre++;
+    if (score <= 2) counts.gauche++;
+    else if (score === 3) counts.centre++;
     else counts.droite++;
   });
 
