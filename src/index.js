@@ -11,6 +11,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const compression = require("compression");
 const cron = require("node-cron");
 const stripeRouter = require("./stripe");
 const askRouter = require("./ask");
@@ -25,8 +26,29 @@ const PORT = process.env.PORT || 3001;
 let memoryCache = [];
 let cacheUpdatedAt = null;
 
+// In-memory response cache for /api/stories keyed by (limit, offset, category).
+// TTL kept short so the 15-min pipeline updates are visible within a minute.
+const STORIES_TTL_MS = 60 * 1000;
+const storiesCache = new Map(); // key -> { at, body }
+function storiesCacheGet(key) {
+  const hit = storiesCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > STORIES_TTL_MS) { storiesCache.delete(key); return null; }
+  return hit.body;
+}
+function storiesCacheSet(key, body) {
+  storiesCache.set(key, { at: Date.now(), body });
+  // Bound cache size to avoid unbounded growth
+  if (storiesCache.size > 200) {
+    const oldest = storiesCache.keys().next().value;
+    storiesCache.delete(oldest);
+  }
+}
+function storiesCacheClear() { storiesCache.clear(); }
+
 // ── Middleware ──────────────────────────────────────────────────────────────
 
+app.use(compression()); // gzip everything by default
 app.use(cors({
  origin: "*",
 }));
@@ -74,6 +96,7 @@ app.post("/api/pipeline/run", async (_req, res) => {
   if (stories.length > 0) {
     memoryCache = stories;
     cacheUpdatedAt = new Date().toISOString();
+    storiesCacheClear();
   }
 });
 
@@ -83,6 +106,15 @@ app.get("/api/stories", async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 20, 50);
     const offset = parseInt(req.query.offset) || 0;
     const category = req.query.category || null;
+    const cacheKey = `${limit}:${offset}:${category || ""}`;
+
+    // Serve from cache if fresh
+    const cached = storiesCacheGet(cacheKey);
+    if (cached) {
+      res.set("Cache-Control", "public, max-age=60, s-maxage=120, stale-while-revalidate=300");
+      res.set("X-Cache", "HIT");
+      return res.json(cached);
+    }
 
     // Try DB first, fall back to memory cache
     let stories;
@@ -93,7 +125,7 @@ app.get("/api/stories", async (req, res) => {
       stories = applyMemoryFilters(memoryCache, { limit, offset, category });
     }
 
-    res.json({
+    const body = {
       stories,
       meta: {
         limit,
@@ -101,7 +133,11 @@ app.get("/api/stories", async (req, res) => {
         count: stories.length,
         source: stories === memoryCache ? "cache" : "db",
       },
-    });
+    };
+    storiesCacheSet(cacheKey, body);
+    res.set("Cache-Control", "public, max-age=60, s-maxage=120, stale-while-revalidate=300");
+    res.set("X-Cache", "MISS");
+    res.json(body);
   } catch (err) {
     console.error("[api] /stories error:", err.message);
     res.status(500).json({ error: "Failed to fetch stories" });
@@ -112,6 +148,7 @@ app.get("/api/stories", async (req, res) => {
 app.get("/api/stories/:id", async (req, res) => {
   try {
     const story = await getStoryById(req.params.id);
+    res.set("Cache-Control", "public, max-age=120, s-maxage=300, stale-while-revalidate=600");
     res.json(story);
   } catch (err) {
     // Try memory cache
@@ -124,6 +161,8 @@ app.get("/api/stories/:id", async (req, res) => {
 
 // GET /api/sources — all sources with bias + ownership metadata
 app.get("/api/sources", (_req, res) => {
+  // Sources rarely change — cache aggressively (1h browser / 6h CDN)
+  res.set("Cache-Control", "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400");
   res.json({
     sources: SOURCES,
     meta: { count: SOURCES.length, updatedAt: "2026-03-31" },
@@ -165,6 +204,7 @@ async function start() {
     if (updated.length > 0) {
       memoryCache = updated;
       cacheUpdatedAt = new Date().toISOString();
+      storiesCacheClear();
     }
   });
 
